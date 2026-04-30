@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, LogOut, Badge as BadgeIcon, Building, GraduationCap, Mail } from 'lucide-react';
+import { LogOut, Badge as BadgeIcon, Building, GraduationCap, Mail } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { logout } from '@/lib/auth';
 import { getInitials, getRoleLabel } from '@/lib/utils';

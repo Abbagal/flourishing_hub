@@ -30,16 +30,16 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
   admin: [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { label: 'Events', href: '/admin#events', icon: Calendar },
-    { label: 'Members', href: '/admin#members', icon: Users },
+    { label: 'Members', href: '/admin#students', icon: Users },
     { label: 'Roles', href: '/admin#roles', icon: ShieldCheck },
     { label: 'Settings', href: '/admin#settings', icon: Settings },
   ],
   volunteer: [
-    { label: 'Dashboard', href: '/volunteer', icon: LayoutDashboard },
-    { label: 'Events', href: '/volunteer#events', icon: Calendar },
-    { label: 'Schedule', href: '/volunteer#schedule', icon: Clock },
-    { label: 'Volunteer', href: '/volunteer#volunteer', icon: Heart },
-    { label: 'History', href: '/volunteer#history', icon: History },
+    { label: 'Dashboard', href: '/student', icon: LayoutDashboard },
+    { label: 'Events', href: '/student#events', icon: Calendar },
+    { label: 'Schedule', href: '/student#schedule', icon: Clock },
+    { label: 'Volunteer', href: '/student#events', icon: Heart },
+    { label: 'History', href: '/student#history', icon: History },
   ],
   'associate-instructor': [
     { label: 'Dashboard', href: '/associate-instructor', icon: LayoutDashboard },
@@ -107,7 +107,8 @@ export default function Sidebar({ role, userName }: SidebarProps) {
         )}
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const itemPath = item.href.split('#')[0];
+          const isActive = pathname === itemPath;
           return (
             <Link
               key={item.href}

@@ -1,43 +1,49 @@
-import { clsx, type ClassValue } from 'clsx';
+import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { UserRole } from '@/types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function getRoleLabel(role: UserRole): string {
-  const labels: Record<UserRole, string> = {
-    student: 'Student',
-    instructor: 'Instructor',
-    admin: 'Administrator',
-    volunteer: 'Volunteer',
-    'associate-instructor': 'Associate Instructor',
-  };
-  return labels[role] ?? role;
+export function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export function getRolePath(role: UserRole): string {
-  const paths: Record<UserRole, string> = {
-    student: '/student',
-    instructor: '/instructor',
-    admin: '/admin',
-    volunteer: '/volunteer',
-    'associate-instructor': '/associate-instructor',
-  };
-  return paths[role] ?? '/student';
-}
-
-export function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number);
+export function formatTime(timeStr: string): string {
+  const [h, m] = timeStr.split(':').map(Number);
   const period = h >= 12 ? 'PM' : 'AM';
   const hour = h % 12 || 12;
   return `${hour}:${m.toString().padStart(2, '0')} ${period}`;
 }
 
-export function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+export function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+export function getRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    student: 'Student',
+    instructor: 'Instructor',
+    admin: 'Administrator',
+    volunteer: 'Student Volunteer',
+    'associate-instructor': 'Associate Instructor',
+  };
+  return labels[role] ?? role;
+}
+
+export function getRolePath(role: string): string {
+  const paths: Record<string, string> = {
+    student: '/student',
+    instructor: '/instructor',
+    admin: '/admin',
+    volunteer: '/student',
+    'associate-instructor': '/associate-instructor',
+  };
+  return paths[role] ?? '/student';
 }
 
 export function getInitials(name: string): string {
@@ -45,14 +51,10 @@ export function getInitials(name: string): string {
     .split(' ')
     .map((n) => n[0])
     .join('')
-    .slice(0, 2)
-    .toUpperCase();
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 export function getAvatarUrl(name: string): string {
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6C63FF&color=fff&bold=true`;
-}
-
-export function renderStars(rating: number): string {
-  return '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6C63FF&color=fff&size=128`;
 }

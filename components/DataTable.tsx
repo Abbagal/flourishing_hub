@@ -7,7 +7,7 @@ import { Search, ChevronUp, ChevronDown } from 'lucide-react';
 export interface Column<T> {
   key: keyof T | string;
   label: string;
-  render?: (row: T) => React.ReactNode;
+  render?: (value: unknown, row: T) => React.ReactNode;
   sortable?: boolean;
 }
 
@@ -18,6 +18,8 @@ interface DataTableProps<T extends Record<string, unknown>> {
   searchPlaceholder?: string;
   emptyMessage?: string;
   maxRows?: number;
+  searchable?: boolean;
+  loading?: boolean;
 }
 
 export default function DataTable<T extends Record<string, unknown>>({
@@ -27,6 +29,8 @@ export default function DataTable<T extends Record<string, unknown>>({
   searchPlaceholder = 'Search...',
   emptyMessage = 'No records found.',
   maxRows,
+  searchable = true,
+  loading = false,
 }: DataTableProps<T>) {
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -34,28 +38,33 @@ export default function DataTable<T extends Record<string, unknown>>({
 
   const filtered = data.filter((row) => {
     if (!query) return true;
-    const q = query.toLowerCase();
-    return searchKeys.some((k) => String(row[k] ?? '').toLowerCase().includes(q));
+    const value = query.toLowerCase();
+    return searchKeys.some((key) => String(row[key] ?? '').toLowerCase().includes(value));
   });
 
   const sorted = sortKey
-    ? [...filtered].sort((a, b) => {
-        const av = String(a[sortKey] ?? '');
-        const bv = String(b[sortKey] ?? '');
-        return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    ? [...filtered].sort((left, right) => {
+        const leftValue = String(left[sortKey] ?? '');
+        const rightValue = String(right[sortKey] ?? '');
+        return sortDir === 'asc' ? leftValue.localeCompare(rightValue) : rightValue.localeCompare(leftValue);
       })
     : filtered;
 
   const displayed = maxRows ? sorted.slice(0, maxRows) : sorted;
 
   const toggleSort = (key: string) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortKey(key); setSortDir('asc'); }
+    if (sortKey === key) {
+      setSortDir((direction) => direction === 'asc' ? 'desc' : 'asc');
+      return;
+    }
+
+    setSortKey(key);
+    setSortDir('asc');
   };
 
   return (
     <div className="space-y-4">
-      {searchKeys.length > 0 && (
+      {searchable && searchKeys.length > 0 && (
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
           <input
@@ -71,18 +80,18 @@ export default function DataTable<T extends Record<string, unknown>>({
         <table className="w-full table-dark">
           <thead>
             <tr>
-              {columns.map((col) => (
+              {columns.map((column) => (
                 <th
-                  key={String(col.key)}
-                  onClick={() => col.sortable && toggleSort(String(col.key))}
-                  className={`px-4 py-3 text-left ${col.sortable ? 'cursor-pointer select-none' : ''}`}
+                  key={String(column.key)}
+                  onClick={() => column.sortable && toggleSort(String(column.key))}
+                  className={`px-4 py-3 text-left ${column.sortable ? 'cursor-pointer select-none' : ''}`}
                 >
                   <div className="flex items-center gap-1">
-                    {col.label}
-                    {col.sortable && (
+                    {column.label}
+                    {column.sortable && (
                       <span className="flex flex-col">
-                        <ChevronUp className={`w-2.5 h-2.5 ${sortKey === col.key && sortDir === 'asc' ? 'text-primary' : 'text-white/20'}`} />
-                        <ChevronDown className={`w-2.5 h-2.5 -mt-1 ${sortKey === col.key && sortDir === 'desc' ? 'text-primary' : 'text-white/20'}`} />
+                        <ChevronUp className={`w-2.5 h-2.5 ${sortKey === column.key && sortDir === 'asc' ? 'text-primary' : 'text-white/20'}`} />
+                        <ChevronDown className={`w-2.5 h-2.5 -mt-1 ${sortKey === column.key && sortDir === 'desc' ? 'text-primary' : 'text-white/20'}`} />
                       </span>
                     )}
                   </div>
@@ -91,23 +100,24 @@ export default function DataTable<T extends Record<string, unknown>>({
             </tr>
           </thead>
           <tbody>
-            {displayed.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-10 text-center text-sm text-white/30">
+                  Loading...
+                </td>
+              </tr>
+            ) : displayed.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-10 text-center text-sm text-white/30">
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              displayed.map((row, i) => (
-                <motion.tr
-                  key={i}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                >
-                  {columns.map((col) => (
-                    <td key={String(col.key)} className="px-4 py-3 text-sm text-white/80">
-                      {col.render ? col.render(row) : String(row[col.key as keyof T] ?? '—')}
+              displayed.map((row, index) => (
+                <motion.tr key={index} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }}>
+                  {columns.map((column) => (
+                    <td key={String(column.key)} className="px-4 py-3 text-sm text-white/80">
+                      {column.render ? column.render(row[column.key as keyof T], row) : String(row[column.key as keyof T] ?? '-')}
                     </td>
                   ))}
                 </motion.tr>

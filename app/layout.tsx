@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: 'Flourishing Hub — IIT Bombay Student Wellness Center',
+  title: 'Flourishing Hub - IIT Bombay Student Wellness Center',
   description: 'Your comprehensive wellness companion at IIT Bombay. Track your wellbeing journey, attend workshops, and thrive.',
 };
 

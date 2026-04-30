@@ -10,6 +10,7 @@ interface StatCardProps {
   icon: LucideIcon;
   color?: 'purple' | 'teal' | 'yellow' | 'red' | 'blue';
   trend?: { value: number; label: string };
+  index?: number;
 }
 
 const colorMap = {

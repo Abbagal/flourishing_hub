@@ -1,167 +1,373 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Video, Users, Clock, CheckCircle, Wifi, WifiOff, MapPin, Calendar } from 'lucide-react';
+import { Video, Users, Calendar, TrendingUp, MapPin, ExternalLink, Play } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import StatCard from '@/components/StatCard';
 import MiniCalendar from '@/components/MiniCalendar';
 import DataTable from '@/components/DataTable';
-import { mockInstructors } from '@/lib/mockData';
-import { formatDate, formatTime } from '@/lib/utils';
-import type { Session } from '@/types';
-
-const instructor = mockInstructors[0];
-
-const upcomingSessions = instructor.sessions.filter((s) => s.status === 'upcoming');
-const pastSessions = instructor.sessions.filter((s) => s.status === 'completed');
-
-const sessionDates = instructor.sessions.map((s) => s.date);
-
-const pastRecords = pastSessions.map((s) => ({
-  title: s.title,
-  date: formatDate(s.date),
-  time: formatTime(s.time),
-  venue: s.venue,
-  mode: s.mode,
-  attendees: s.actualAttendees ?? s.participantCount,
-  registered: s.participantCount,
-}));
-
-function SessionCard({ session }: { session: Session }) {
-  return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      className="glass-card rounded-2xl p-5"
-    >
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <h3 className="text-sm font-semibold text-white leading-tight">{session.title}</h3>
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${
-          session.mode === 'Online'
-            ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-            : 'bg-teal-500/15 text-teal-400 border-teal-500/30'
-        }`}>
-          {session.mode === 'Online' ? <Wifi className="w-2.5 h-2.5" /> : <WifiOff className="w-2.5 h-2.5" />}
-          {session.mode}
-        </span>
-      </div>
-      <div className="space-y-1.5 mb-4">
-        <div className="flex items-center gap-2 text-xs text-white/50">
-          <Calendar className="w-3.5 h-3.5 text-primary/70" />
-          <span>{formatDate(session.date)}</span>
-          <Clock className="w-3.5 h-3.5 text-primary/70 ml-1" />
-          <span>{formatTime(session.time)}</span>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-white/50">
-          <MapPin className="w-3.5 h-3.5 text-accent/70" />
-          <span className="truncate">{session.venue}</span>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-white/50">
-          <Users className="w-3.5 h-3.5 text-primary/70" />
-          <span>{session.participantCount} registered</span>
-        </div>
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="badge-purple text-[10px]">Upcoming</span>
-        <motion.button
-          whileTap={{ scale: 0.95 }}
-          className="text-xs text-primary hover:text-primary/70 font-medium transition-colors"
-        >
-          View Details →
-        </motion.button>
-      </div>
-    </motion.div>
-  );
-}
+import { Badge } from '@/components/ui/badge';
+import { StatCardSkeleton } from '@/components/ui/skeleton';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { availabilityRequest, checkInRequest, dashboardRequest, eventsRequest, selfAssignRequest, sessionStartRequest } from '@/lib/api';
+import { formatDate, formatTime, getGreeting } from '@/lib/utils';
+import { getStoredUser } from '@/lib/auth';
+import type { FrontendEvent, InstructorDashboardData, Session } from '@/types';
+import toast from 'react-hot-toast';
 
 export default function InstructorDashboard() {
+  const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState('');
+  const [sessionModal, setSessionModal] = useState<Session | null>(null);
+  const [instructor, setInstructor] = useState<InstructorDashboardData | null>(null);
+  const [activeEvents, setActiveEvents] = useState<FrontendEvent[]>([]);
+
+  useEffect(() => {
+    const user = getStoredUser();
+    setUserName(user?.name ?? 'Instructor');
+
+    const loadDashboard = async () => {
+      try {
+        const [data, eventData] = await Promise.all([dashboardRequest(), eventsRequest()]);
+        setInstructor(data.dashboard as InstructorDashboardData);
+        setActiveEvents(eventData);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load instructor dashboard';
+        toast.error(message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadDashboard();
+  }, []);
+
+  const refreshEvents = async () => setActiveEvents(await eventsRequest());
+
+  const handleAvailability = async (eventId: string, isAvailable: boolean) => {
+    try {
+      await availabilityRequest(eventId, { isAvailable });
+      await refreshEvents();
+      toast.success(isAvailable ? 'Availability marked as available' : 'Availability marked as unavailable');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update availability';
+      toast.error(message);
+    }
+  };
+
+  const handleSelfAssign = async (eventId: string) => {
+    try {
+      await selfAssignRequest(eventId);
+      await refreshEvents();
+      toast.success('You are assigned to this event');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to self-assign';
+      toast.error(message);
+    }
+  };
+
+  const handleCheckIn = async (eventId: string, eventTitle: string, moduleId?: string) => {
+    try {
+      await checkInRequest(eventId, moduleId);
+      await refreshEvents();
+      toast.success(`Checked in for ${eventTitle}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to check in';
+      toast.error(message);
+    }
+  };
+
+  const upcomingSessions = instructor?.sessions.filter((s) => s.status === 'upcoming' || s.status === 'ongoing') ?? [];
+  const pastSessions = instructor?.sessions.filter((s) => s.status === 'completed') ?? [];
+  const eventDates = upcomingSessions.map((s) => s.date);
+
+  const pastColumns = [
+    {
+      key: 'title',
+      label: 'Session Name',
+      sortable: true,
+      render: (_: unknown, row: Session) => <span className="font-medium text-white">{row.title}</span>,
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      render: (_: unknown, row: Session) => <Badge variant="purple">{row.type}</Badge>,
+    },
+    {
+      key: 'date',
+      label: 'Date',
+      sortable: true,
+      render: (_: unknown, row: Session) => <span className="text-white/50 text-xs">{formatDate(row.date)}</span>,
+    },
+    {
+      key: 'participantCount',
+      label: 'Registered',
+      render: (_: unknown, row: Session) => <span className="text-white/70">{row.participantCount}</span>,
+    },
+    {
+      key: 'actualAttendees',
+      label: 'Attended',
+      render: (_: unknown, row: Session) => row.actualAttendees !== undefined ? (
+        <div className="flex items-center gap-2">
+          <span className="text-accent font-semibold">{row.actualAttendees}</span>
+          <span className="text-white/30 text-xs">
+            ({Math.round((row.actualAttendees / row.participantCount) * 100)}%)
+          </span>
+        </div>
+      ) : <span className="text-white/30">-</span>,
+    },
+  ] as const;
+
   return (
-    <DashboardLayout>
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold text-white">
-          <span className="gradient-text">{instructor.name}</span>
-        </h1>
-        <p className="text-sm text-white/50 mt-1">{instructor.specialization} · {instructor.department}</p>
+    <DashboardLayout expectedRole="instructor">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card rounded-2xl p-6 relative overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-accent/10 pointer-events-none" />
+        <div className="relative z-10">
+          <p className="text-white/50 text-sm mb-1">{new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <h1 className="text-2xl font-bold text-white">
+            {getGreeting()}, <span className="gradient-text">{userName.split(' ').slice(-1)[0]}</span>!
+          </h1>
+          <p className="text-white/50 text-sm mt-1">
+            You have <span className="text-primary font-semibold">{upcomingSessions.length} upcoming sessions</span> and{' '}
+            <span className="text-accent font-semibold">{instructor?.totalStudents ?? 0} students</span> enrolled
+          </p>
+        </div>
       </motion.div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Students" value={instructor.totalStudents} icon={Users} color="purple" />
-        <StatCard title="Upcoming Sessions" value={upcomingSessions.length} icon={Video} color="teal" />
-        <StatCard title="Completed Sessions" value={pastSessions.length} icon={CheckCircle} color="yellow" />
-        <StatCard title="Emp ID" value={instructor.empId} icon={Clock} color="blue" />
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+        ) : (
+          <>
+            <StatCard title="Total Students" value={instructor?.totalStudents ?? 0} icon={Users} color="purple" index={0} />
+            <StatCard title="Upcoming Sessions" value={upcomingSessions.length} icon={Video} color="teal" index={1} />
+            <StatCard title="Past Sessions" value={pastSessions.length} icon={TrendingUp} color="yellow" index={2} />
+            <StatCard title="Avg. Attendance" value="92%" subtitle="across sessions" icon={Calendar} color="blue" index={3} />
+          </>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          {/* Upcoming Sessions */}
-          <div className="glass-card rounded-2xl p-6" id="sessions">
-            <h2 className="text-base font-semibold text-white mb-4">Upcoming Sessions</h2>
-            {upcomingSessions.length === 0 ? (
-              <div className="text-center py-8 text-white/30 text-sm">No upcoming sessions scheduled</div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {upcomingSessions.map((session) => (
-                  <SessionCard key={session.id} session={session} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Past Sessions */}
-          <div className="glass-card rounded-2xl p-6" id="schedule">
-            <h2 className="text-base font-semibold text-white mb-4">Past Sessions</h2>
-            <DataTable
-              data={pastRecords as unknown as Record<string, unknown>[]}
-              columns={[
-                { key: 'title', label: 'Session', sortable: true },
-                { key: 'date', label: 'Date', sortable: true },
-                { key: 'venue', label: 'Venue' },
-                {
-                  key: 'mode', label: 'Mode',
-                  render: (row) => (
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                      (row as { mode: string }).mode === 'Online'
-                        ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-                        : 'bg-teal-500/15 text-teal-400 border-teal-500/30'
-                    }`}>
-                      {(row as { mode: string }).mode}
-                    </span>
-                  ),
-                },
-                { key: 'attendees', label: 'Attended' },
-              ]}
-              searchKeys={['title'] as never[]}
-              searchPlaceholder="Search sessions..."
-              emptyMessage="No past sessions"
-            />
-          </div>
+      <div id="sessions">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <Video className="w-4 h-4 text-primary" /> Upcoming Sessions
+          </h2>
+          <Badge variant="purple">{upcomingSessions.length} scheduled</Badge>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          <MiniCalendar
-            registeredEventDates={upcomingSessions.map((s) => s.date)}
-            unregisteredEventDates={pastSessions.map((s) => s.date)}
-          />
-
-          <div className="glass-card rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-white mb-3">Profile</h3>
-            <div className="space-y-2.5">
-              {[
-                ['Name', instructor.name],
-                ['Emp ID', instructor.empId],
-                ['Department', instructor.department],
-                ['Specialization', instructor.specialization],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <p className="text-[10px] text-white/30">{label}</p>
-                  <p className="text-xs text-white/80 font-medium">{value}</p>
+        {upcomingSessions.length === 0 ? (
+          <div className="glass-card rounded-2xl p-12 text-center">
+            <div className="text-5xl mb-4">03</div>
+            <p className="text-white/40">No upcoming sessions scheduled</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {upcomingSessions.map((session, i) => (
+              <motion.div
+                key={session.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                whileHover={{ y: -3 }}
+                className="glass-card rounded-2xl p-5 group"
+              >
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-white group-hover:text-primary transition-colors line-clamp-2">
+                      {session.title}
+                    </h3>
+                    <p className="text-xs text-white/40 mt-1 capitalize">{session.type.replace('-', ' ')}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 glass rounded-lg px-2 py-1">
+                    <Users className="w-3 h-3 text-accent" />
+                    <span className="text-xs font-semibold text-accent">{session.participantCount}</span>
+                  </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2 text-xs text-white/50">
+                    <Calendar className="w-3.5 h-3.5 text-primary/60 shrink-0" />
+                    <span>{formatDate(session.date)} - {formatTime(session.time)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-white/50">
+                    <MapPin className="w-3.5 h-3.5 text-accent/60 shrink-0" />
+                    <span>{session.venue}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  {session.meetLink && (
+                    <a
+                      href={session.meetLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1"
+                    >
+                      <Button variant="default" size="sm" className="w-full gap-1.5">
+                        <ExternalLink className="w-3 h-3" /> Join Meet
+                      </Button>
+                    </a>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSessionModal(session)}
+                    className="flex-1 gap-1.5"
+                  >
+                    <Play className="w-3 h-3" /> Start Session
+                  </Button>
+                </div>
+              </motion.div>
+            ))}
           </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2" id="participants">
+          <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" /> Past Sessions
+          </h2>
+          <DataTable
+            data={pastSessions as unknown as Record<string, unknown>[]}
+            columns={pastColumns as any}
+            searchable
+            searchKeys={['title' as never]}
+            emptyMessage="No past sessions yet"
+            loading={loading}
+          />
+        </div>
+
+        <div id="schedule">
+          <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-accent" /> Session Calendar
+          </h2>
+          <MiniCalendar eventDates={eventDates} />
         </div>
       </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-white">Event Availability & Assignment</h2>
+          <Badge variant="green">{activeEvents.length} live events</Badge>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {activeEvents.map((event) => (
+            <div key={event.id} className="glass-card rounded-2xl p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">{event.title}</h3>
+                  <p className="text-xs text-white/40 mt-1">{formatDate(event.date)} - {formatTime(event.time)}</p>
+                </div>
+                <Badge variant="purple">{event.type}</Badge>
+              </div>
+              <p className="mt-3 text-sm text-white/50">{event.venue}</p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" onClick={() => void handleAvailability(event.id, true)}>Available</Button>
+                <Button variant="secondary" size="sm" onClick={() => void handleAvailability(event.id, false)}>Not Available</Button>
+              </div>
+              <p className="mt-2 text-[11px] text-white/40">
+                {event.myAvailability
+                  ? `Availability updated on ${new Date(event.myAvailability.respondedAt).toLocaleString('en-IN')}`
+                  : 'Share your availability so admin can assign you.'}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-3 w-full"
+                disabled={!event.canSelfAssign}
+                onClick={() => void handleSelfAssign(event.id)}
+              >
+                {event.myAssignments?.includes('INSTRUCTOR') ? 'Already Assigned' : event.canSelfAssign ? 'Self-Assign to Event' : 'Instructor Already Assigned'}
+              </Button>
+              {event.myAssignments?.includes('INSTRUCTOR') && (
+                <>
+                  <Button
+                    variant={event.canCheckInNow ? 'default' : 'outline'}
+                    size="sm"
+                    className="mt-3 w-full"
+                    disabled={!event.canCheckInNow}
+                    onClick={() => void handleCheckIn(event.id, event.title, event.selectedSessionId ?? event.sessions?.[0]?.id)}
+                  >
+                    {event.checkInStatus === 'attendance-marked'
+                      ? 'Attendance Marked'
+                      : event.checkInStatus === 'checked-in'
+                        ? 'Checked In'
+                        : 'Instructor Check In'}
+                  </Button>
+                  <p className="mt-2 text-[11px] text-white/40">
+                    {event.canCheckInNow
+                      ? 'Check-in is open for today.'
+                      : `Check-in becomes active on the event day around ${event.checkInOpensLabel}.`}
+                  </p>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Dialog open={!!sessionModal} onOpenChange={() => setSessionModal(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start Session</DialogTitle>
+            <DialogDescription>
+              You are about to start the following session. This will update the live interface for participants.
+            </DialogDescription>
+          </DialogHeader>
+          {sessionModal && (
+            <div className="space-y-4">
+              <div className="glass rounded-xl p-4 space-y-2">
+                <p className="text-sm font-semibold text-white">{sessionModal.title}</p>
+                <div className="flex items-center gap-2 text-xs text-white/50">
+                  <Calendar className="w-3.5 h-3.5" />
+                  {formatDate(sessionModal.date)} - {formatTime(sessionModal.time)}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-white/50">
+                  <Users className="w-3.5 h-3.5" />
+                  {sessionModal.participantCount} participants registered
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button variant="secondary" className="flex-1" onClick={() => setSessionModal(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="default"
+                  className="flex-1"
+                  onClick={async () => {
+                    try {
+                      await sessionStartRequest(sessionModal.id);
+                      toast.success('Session started and synced with the backend.');
+                      setInstructor((prev) => prev ? {
+                        ...prev,
+                        sessions: prev.sessions.map((session) =>
+                          session.id === sessionModal.id ? { ...session, status: 'ongoing' } : session
+                        ),
+                      } : prev);
+                      setSessionModal(null);
+                    } catch (err) {
+                      const message = err instanceof Error ? err.message : 'Failed to start session';
+                      toast.error(message);
+                    }
+                  }}
+                >
+                  <Play className="w-4 h-4" /> Start Now
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

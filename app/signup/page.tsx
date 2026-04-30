@@ -5,16 +5,24 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Mail, Lock, User, Hash, BookOpen, Building, Sparkles, ArrowRight, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { mockSignup } from '@/lib/auth';
+import { registerStudent } from '@/lib/auth';
 import type { Programme } from '@/types';
 import toast from 'react-hot-toast';
 
-const PROGRAMMES: Programme[] = ['BTech', 'MTech', 'PhD', 'MSc', 'Staff'];
+const PROGRAMMES: Programme[] = ['BTech', 'MTech', 'PhD', 'MSc', 'MA', 'Other'];
 const DEPARTMENTS = [
-  'Computer Science & Engineering', 'Electrical Engineering', 'Mechanical Engineering',
-  'Civil Engineering', 'Chemical Engineering', 'Aerospace Engineering',
-  'Physics', 'Mathematics', 'Chemistry', 'Humanities & Social Sciences',
-  'Student Wellness Center', 'Other',
+  'Computer Science & Engineering',
+  'Electrical Engineering',
+  'Mechanical Engineering',
+  'Civil Engineering',
+  'Chemical Engineering',
+  'Aerospace Engineering',
+  'Physics',
+  'Mathematics',
+  'Chemistry',
+  'Humanities & Social Sciences',
+  'Student Wellness Center',
+  'Other',
 ];
 
 export default function SignupPage() {
@@ -22,46 +30,65 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
   const [form, setForm] = useState({
-    name: '', rollNo: '', year: '', batch: '',
+    name: '',
+    rollNo: '',
+    year: '',
+    batch: '',
     programme: '' as Programme | '',
-    department: '', email: '', password: '', confirmPassword: '',
+    department: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const set = (key: string, val: string) => {
-    setForm((f) => ({ ...f, [key]: val }));
-    setErrors((e) => ({ ...e, [key]: '' }));
+  const setField = (key: string, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: '' }));
   };
 
   const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = 'Name is required';
-    if (!form.rollNo.trim()) e.rollNo = 'Roll No / Emp ID is required';
-    if (!form.year && form.programme !== 'Staff') e.year = 'Year is required';
-    if (!form.batch.trim()) e.batch = 'Batch is required';
-    if (!form.programme) e.programme = 'Programme is required';
-    if (!form.department) e.department = 'Department is required';
-    if (!form.email.endsWith('@iitb.ac.in')) e.email = 'Only @iitb.ac.in emails allowed';
-    if (form.password.length < 6) e.password = 'Password must be at least 6 characters';
-    if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
-    return e;
+    const next: Record<string, string> = {};
+
+    if (!form.name.trim()) next.name = 'Name is required';
+    if (!form.rollNo.trim()) next.rollNo = 'Roll number is required';
+    if (!form.year) next.year = 'Year is required';
+    if (!form.batch.trim()) next.batch = 'Batch is required';
+    if (!form.programme) next.programme = 'Programme is required';
+    if (!form.department) next.department = 'Department is required';
+    if (!form.email.endsWith('@iitb.ac.in')) next.email = 'Only @iitb.ac.in emails are allowed';
+    if (form.password.length < 8) next.password = 'Password must be at least 8 characters';
+    if (!/[A-Z]/.test(form.password)) next.password = 'Password must contain one uppercase letter';
+    if (!/[a-z]/.test(form.password)) next.password = 'Password must contain one lowercase letter';
+    if (!/[0-9]/.test(form.password)) next.password = 'Password must contain one digit';
+    if (form.password !== form.confirmPassword) next.confirmPassword = 'Passwords do not match';
+
+    return next;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length > 0) { setErrors(errs); toast.error('Please fix the errors below'); return; }
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const nextErrors = validate();
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      toast.error('Please fix the highlighted fields');
+      return;
+    }
+
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
     try {
-      mockSignup({
-        name: form.name, rollNo: form.rollNo, year: form.year, batch: form.batch,
+      await registerStudent({
+        name: form.name,
+        rollNo: form.rollNo,
+        year: Number(form.year),
+        batch: form.batch,
         programme: form.programme as Programme,
-        department: form.department, email: form.email, password: form.password,
+        department: form.department,
+        email: form.email,
+        password: form.password,
       });
-      toast.success('Account created! Welcome to Flourishing Hub!');
+      toast.success('Account created successfully');
       router.push('/home');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Signup failed');
@@ -83,7 +110,6 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex bg-dark">
-      {/* Left panel */}
       <div className="hidden lg:flex flex-col justify-between w-5/12 bg-gradient-to-br from-[#13132A] to-[#0F0F1A] p-12 relative overflow-hidden">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 left-20 w-64 h-64 rounded-full bg-accent/10 blur-3xl" />
@@ -99,25 +125,27 @@ export default function SignupPage() {
           </div>
         </div>
         <div className="relative z-10 space-y-6">
-          <h1 className="text-4xl font-black gradient-text leading-tight">Join the<br />Community</h1>
+          <h1 className="text-4xl font-black gradient-text leading-tight">Join the
+            <br />
+            Community
+          </h1>
           <p className="text-white/50 text-sm leading-relaxed">
-            Create your account to access wellness workshops, track your journey, and connect with a supportive community at IIT Bombay.
+            Create your account to access live wellness events, track your progress, and work with the real backend from day one.
           </p>
           <div className="glass rounded-2xl p-4 space-y-3">
-            {['Access all wellness events', 'Track your progress', 'Connect with peers & mentors'].map((t) => (
-              <div key={t} className="flex items-center gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center">
-                  <span className="text-accent text-xs">✓</span>
+            {['Register for real events', 'Track attendance and feedback', 'Use your IIT Bombay account details'].map((item) => (
+              <div key={item} className="flex items-center gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center text-accent text-xs">
+                  OK
                 </div>
-                <span className="text-sm text-white/70">{t}</span>
+                <span className="text-sm text-white/70">{item}</span>
               </div>
             ))}
           </div>
         </div>
-        <p className="relative z-10 text-xs text-white/20">© 2026 Flourishing Hub · IIT Bombay</p>
+        <p className="relative z-10 text-xs text-white/20">(c) 2026 Flourishing Hub · IIT Bombay</p>
       </div>
 
-      {/* Right panel */}
       <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
@@ -138,38 +166,32 @@ export default function SignupPage() {
             </Link>
             <div>
               <h2 className="text-2xl font-bold text-white">Create Account</h2>
-              <p className="text-sm text-white/50">Fill in your IITB details</p>
+              <p className="text-sm text-white/50">Student signup connected to the live backend</p>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <Field label="Full Name" icon={User} error={errors.name}>
-                <input value={form.name} onChange={(e) => set('name', e.target.value)}
-                  placeholder="Your full name" className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
+                <input value={form.name} onChange={(e) => setField('name', e.target.value)} placeholder="Your full name" className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
               </Field>
-              <Field label="Roll No / Emp ID" icon={Hash} error={errors.rollNo}>
-                <input value={form.rollNo} onChange={(e) => set('rollNo', e.target.value)}
-                  placeholder="e.g. 23B030012" className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
+              <Field label="Roll Number" icon={Hash} error={errors.rollNo}>
+                <input value={form.rollNo} onChange={(e) => setField('rollNo', e.target.value)} placeholder="e.g. 23B030012" className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
               </Field>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <Field label="Year" icon={BookOpen} error={errors.year}>
-                <input value={form.year} onChange={(e) => set('year', e.target.value)}
-                  placeholder="1–5" type="number" min="1" max="6"
-                  className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
+                <input value={form.year} onChange={(e) => setField('year', e.target.value)} placeholder="1-6" type="number" min="1" max="6" className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
               </Field>
               <Field label="Batch" icon={Hash} error={errors.batch}>
-                <input value={form.batch} onChange={(e) => set('batch', e.target.value)}
-                  placeholder="e.g. 2023" className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
+                <input value={form.batch} onChange={(e) => setField('batch', e.target.value)} placeholder="e.g. 2023" className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
               </Field>
               <div>
                 <label className="text-xs font-medium text-white/60 mb-1.5 block">Programme</label>
-                <select value={form.programme} onChange={(e) => set('programme', e.target.value)}
-                  className="input-dark w-full px-3 py-3 rounded-xl text-sm appearance-none">
+                <select value={form.programme} onChange={(e) => setField('programme', e.target.value)} className="input-dark w-full px-3 py-3 rounded-xl text-sm appearance-none">
                   <option value="">Select</option>
-                  {PROGRAMMES.map((p) => <option key={p} value={p}>{p}</option>)}
+                  {PROGRAMMES.map((programme) => <option key={programme} value={programme}>{programme}</option>)}
                 </select>
                 {errors.programme && <p className="text-xs text-red-400 mt-1">{errors.programme}</p>}
               </div>
@@ -179,19 +201,16 @@ export default function SignupPage() {
               <label className="text-xs font-medium text-white/60 mb-1.5 block">Department</label>
               <div className="relative">
                 <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 z-10" />
-                <select value={form.department} onChange={(e) => set('department', e.target.value)}
-                  className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm appearance-none">
+                <select value={form.department} onChange={(e) => setField('department', e.target.value)} className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm appearance-none">
                   <option value="">Select department</option>
-                  {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  {DEPARTMENTS.map((department) => <option key={department} value={department}>{department}</option>)}
                 </select>
               </div>
               {errors.department && <p className="text-xs text-red-400 mt-1">{errors.department}</p>}
             </div>
 
             <Field label="Email Address" icon={Mail} error={errors.email}>
-              <input value={form.email} onChange={(e) => set('email', e.target.value)}
-                type="email" placeholder="yourname@iitb.ac.in"
-                className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
+              <input value={form.email} onChange={(e) => setField('email', e.target.value)} type="email" placeholder="yourname@iitb.ac.in" className="input-dark w-full pl-10 pr-4 py-3 rounded-xl text-sm" />
             </Field>
 
             <div className="grid grid-cols-2 gap-4">
@@ -199,11 +218,8 @@ export default function SignupPage() {
                 <label className="text-xs font-medium text-white/60 mb-1.5 block">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-                  <input value={form.password} onChange={(e) => set('password', e.target.value)}
-                    type={showPassword ? 'text' : 'password'} placeholder="Min 6 chars"
-                    className="input-dark w-full pl-10 pr-10 py-3 rounded-xl text-sm" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors">
+                  <input value={form.password} onChange={(e) => setField('password', e.target.value)} type={showPassword ? 'text' : 'password'} placeholder="At least 8 chars" className="input-dark w-full pl-10 pr-10 py-3 rounded-xl text-sm" />
+                  <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -213,11 +229,8 @@ export default function SignupPage() {
                 <label className="text-xs font-medium text-white/60 mb-1.5 block">Confirm Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-                  <input value={form.confirmPassword} onChange={(e) => set('confirmPassword', e.target.value)}
-                    type={showConfirm ? 'text' : 'password'} placeholder="Re-enter password"
-                    className="input-dark w-full pl-10 pr-10 py-3 rounded-xl text-sm" />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors">
+                  <input value={form.confirmPassword} onChange={(e) => setField('confirmPassword', e.target.value)} type={showConfirm ? 'text' : 'password'} placeholder="Re-enter password" className="input-dark w-full pl-10 pr-10 py-3 rounded-xl text-sm" />
+                  <button type="button" onClick={() => setShowConfirm((value) => !value)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors">
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>

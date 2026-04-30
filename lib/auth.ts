@@ -1,167 +1,106 @@
-import type { AuthPayload, UserRole, Programme } from '@/types';
+import { loginRequest, meRequest, registerRequest } from '@/lib/api';
+import type { AuthPayload, Programme } from '@/types';
+import {
+  clearStoredSession,
+  decodeJwtPayload,
+  getStoredRefreshToken,
+  getStoredToken,
+  getStoredUser as getStoredUserFromSession,
+  setStoredRefreshToken,
+  setStoredToken,
+  setStoredUser,
+} from '@/lib/session';
 
-const TOKEN_KEY = 'fh_token';
-const USER_KEY = 'fh_user';
-
-function setAuthCookie(token: string) {
-  document.cookie = `fh_auth=${token}; path=/; max-age=${60 * 60 * 24 * 7}`;
-}
-
-function clearAuthCookie() {
-  document.cookie = 'fh_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
-}
-
-export function mockLogin(email: string, _password: string): AuthPayload {
-  if (!email.endsWith('@iitb.ac.in')) {
-    throw new Error('Only @iitb.ac.in email addresses are allowed.');
+function persistAuth(payload: { token?: string; accessToken?: string; refreshToken?: string; user: AuthPayload }): void {
+  const token = payload.accessToken ?? payload.token;
+  if (token) {
+    setStoredToken(token);
   }
 
-  const lower = email.toLowerCase();
-  let role: UserRole = 'student';
-  let name = 'Arjun Sharma';
-  let rollNo: string | undefined = '23B030012';
-  let empId: string | undefined;
-  let year: number | undefined = 2;
-  let batch: string | undefined = '2023';
-  let programme: Programme = 'BTech';
-
-  if (lower.includes('admin')) {
-    role = 'admin';
-    name = 'Dr. Rajesh Kumar';
-    empId = 'EMP0001';
-    rollNo = undefined;
-    year = undefined;
-    batch = undefined;
-    programme = 'Staff';
-  } else if (lower.includes('associate')) {
-    role = 'associate-instructor';
-    name = 'Ms. Neha Gupta';
-    empId = 'EMP3001';
-    rollNo = undefined;
-    year = undefined;
-    batch = undefined;
-    programme = 'Staff';
-  } else if (lower.includes('instructor')) {
-    role = 'instructor';
-    name = 'Dr. Ananya Krishnan';
-    empId = 'EMP2001';
-    rollNo = undefined;
-    year = undefined;
-    batch = undefined;
-    programme = 'Staff';
-  } else if (lower.includes('volunteer')) {
-    role = 'volunteer';
-    name = 'Sana Iyer';
-    rollNo = '23B050011';
+  if (payload.refreshToken) {
+    setStoredRefreshToken(payload.refreshToken);
+  } else if (!getStoredRefreshToken()) {
+    clearStoredSession();
+    return;
   }
 
-  const payload: AuthPayload = {
-    id: `user_${Math.random().toString(36).slice(2, 9)}`,
-    email,
-    name,
-    role,
-    department: role === 'student' || role === 'volunteer' ? 'Computer Science & Engineering' : 'Student Wellness Center',
-    rollNo,
-    empId,
-    year,
-    batch,
-    programme,
-    iat: Date.now(),
-  };
-
-  const token = btoa(JSON.stringify(payload));
-
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(USER_KEY, JSON.stringify(payload));
-    setAuthCookie(token);
-  }
-
-  return payload;
+  setStoredUser(payload.user);
 }
 
-export function mockSignup(data: {
+export async function login(email: string, password: string): Promise<AuthPayload> {
+  const data = await loginRequest(email, password);
+  persistAuth(data);
+  return data.user;
+}
+
+export async function registerStudent(payload: {
   name: string;
   rollNo: string;
-  year: string;
+  year: number;
   batch: string;
   programme: Programme;
   department: string;
   email: string;
   password: string;
-}): AuthPayload {
-  if (!data.email.endsWith('@iitb.ac.in')) {
-    throw new Error('Only @iitb.ac.in email addresses are allowed.');
-  }
-
-  const payload: AuthPayload = {
-    id: `user_${Math.random().toString(36).slice(2, 9)}`,
-    email: data.email,
-    name: data.name,
-    role: 'student',
-    department: data.department,
-    rollNo: data.rollNo,
-    year: parseInt(data.year) || 1,
-    batch: data.batch,
-    programme: data.programme,
-    iat: Date.now(),
+}): Promise<AuthPayload> {
+  const programmeMap: Record<Programme, 'BTECH' | 'MTECH' | 'PHD' | 'MSC' | 'MA' | 'OTHER'> = {
+    BTech: 'BTECH',
+    MTech: 'MTECH',
+    PhD: 'PHD',
+    MSc: 'MSC',
+    MA: 'MA',
+    Other: 'OTHER',
   };
 
-  const token = btoa(JSON.stringify(payload));
+  await registerRequest({
+    name: payload.name,
+    email: payload.email,
+    password: payload.password,
+    role: 'STUDENT',
+    studentProfile: {
+      rollNumber: payload.rollNo,
+      department: payload.department,
+      yearOfStudy: payload.year,
+      programme: programmeMap[payload.programme],
+      cohort: payload.batch,
+    },
+  });
 
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(USER_KEY, JSON.stringify(payload));
-    setAuthCookie(token);
-  }
-
-  return payload;
+  return login(payload.email, payload.password);
 }
 
 export function logout(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    clearAuthCookie();
-  }
+  clearStoredSession();
 }
 
 export function getStoredUser(): AuthPayload | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? (JSON.parse(raw) as AuthPayload) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function getStoredToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_KEY);
+  return getStoredUserFromSession();
 }
 
 export function decodeToken(token: string): AuthPayload | null {
-  try {
-    return JSON.parse(atob(token)) as AuthPayload;
-  } catch {
-    return null;
-  }
+  return decodeJwtPayload(token);
 }
 
 export function isAuthenticated(): boolean {
   const token = getStoredToken();
   if (!token) return false;
-  return !!decodeToken(token);
+  const payload = decodeToken(token);
+  if (!payload) return false;
+  return !payload.exp || payload.exp * 1000 > Date.now();
 }
 
-export function getRoleDashboardPath(role: UserRole): string {
-  const map: Record<UserRole, string> = {
-    student: '/student',
-    instructor: '/instructor',
-    admin: '/admin',
-    volunteer: '/volunteer',
-    'associate-instructor': '/associate-instructor',
-  };
-  return map[role] ?? '/student';
+export async function syncStoredUser(): Promise<AuthPayload | null> {
+  const token = getStoredToken();
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const data = await meRequest();
+    persistAuth(data);
+    return data.user;
+  } catch {
+    logout();
+    return null;
+  }
 }
